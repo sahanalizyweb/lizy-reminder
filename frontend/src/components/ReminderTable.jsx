@@ -1,5 +1,5 @@
 import { formatDate, formatDays } from '../utils/date'
-import { TYPE_IT_SERVICE, TYPE_PRODUCT, TYPE_REAL_ESTATE, TYPE_TRAVEL } from '../utils/constants'
+import { TYPE_IT_SERVICE, TYPE_PRODUCT, TYPE_REAL_ESTATE, TYPE_TRAVEL, reminderTypeLabel } from '../utils/constants'
 import PhoneActions from './PhoneActions'
 import StatusBadge from './StatusBadge'
 
@@ -12,16 +12,16 @@ const DATE_LABELS = {
 
 /**
  * Columns for the given view ('standard' | 'overdue') and reminder-type
- * filter. Filtered to Product: ID/Customer/Phone/Type/Product/Category/Qty/
- * dates/Assigned/Status/Notes/Action. Filtered to IT Service: the Product/
- * Category/Qty columns are replaced by a single Website Link column.
- * Filtered to Travel: a single Booking / Tour Name column. Filtered to Real
- * Estate: Property / Project Name and Location columns. With no type filter
- * (every kind of reminder in the same table) the first of those columns
- * doubles up as whichever one applies to each row (see the `product_name`
- * cell), Category/Qty/Location read "—" where not relevant, and the date
- * column keeps its generic "Scheduled Date" / "Due Date" label since it
- * can't vary per row.
+ * filter. Filtered to Product: ID/Customer/Phone/Type/Product/dates/Assigned/
+ * Status/Notes/Action (no Category or Quantity column — that data no longer
+ * has anywhere to be set from the form either). Filtered to IT Service: a
+ * single Website Link column in Product's place. Filtered to Travel: a
+ * single Booking / Tour Name column. Filtered to Real Estate: Property /
+ * Project Name and Location columns. With no type filter (every kind of
+ * reminder in the same table) the first of those columns doubles up as
+ * whichever one applies to each row (see the `product_name` cell), Location
+ * reads "—" where not relevant, and the date column keeps its generic
+ * "Scheduled Date" / "Due Date" label since it can't vary per row.
  */
 function buildColumns(view, typeFilter) {
   const middle =
@@ -36,8 +36,6 @@ function buildColumns(view, typeFilter) {
             ]
           : [
               ['product_name', typeFilter === TYPE_PRODUCT ? 'Product' : 'Details'],
-              ['category', 'Category'],
-              ['qty', 'Qty'],
               ...(typeFilter ? [] : [['location', 'Location']]),
             ]
 
@@ -89,7 +87,7 @@ function Cell({ column, reminder, actions }) {
         </td>
       )
     case 'type':
-      return <td>{reminder.reminder_type}</td>
+      return <td className="nowrap">{reminderTypeLabel(reminder.reminder_type)}</td>
     case 'product_name': {
       if (reminder.reminder_type === TYPE_IT_SERVICE) {
         return (
@@ -107,10 +105,6 @@ function Cell({ column, reminder, actions }) {
           <WebsiteLink reminder={reminder} />
         </td>
       )
-    case 'category':
-      return <td>{reminder.reminder_type === TYPE_PRODUCT ? reminder.product_category_name || <span className="muted">—</span> : <span className="muted">—</span>}</td>
-    case 'qty':
-      return <td className="nowrap">{reminder.reminder_type === TYPE_PRODUCT ? reminder.quantity : <span className="muted">—</span>}</td>
     case 'location':
       return <td>{reminder.location || <span className="muted">—</span>}</td>
     case 'scheduled':

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DATE_FILTERS } from '../utils/filters'
-import { RANGE_OPTIONS, REMINDER_TYPES, STATUS_OPTIONS } from '../utils/constants'
+import { RANGE_OPTIONS, REMINDER_TYPES, STATUS_OPTIONS, reminderTypeLabel } from '../utils/constants'
 
 /**
  * Filters for a reminder table. The fields edit a draft; "Apply Filters" (or
@@ -63,7 +63,9 @@ export default function FilterPanel({ applied, staff, showRange = false, showAss
           <select value={draft.reminder_type} onChange={set('reminder_type')}>
             <option value="">All Types</option>
             {REMINDER_TYPES.map((type) => (
-              <option key={type}>{type}</option>
+              <option key={type} value={type}>
+                {reminderTypeLabel(type)}
+              </option>
             ))}
           </select>
         </label>

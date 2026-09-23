@@ -676,8 +676,9 @@ a {
 }
 
 .reminder-table {
-  width: 100%;
-  min-width: 1200px;
+  /* Column widths size themselves to content (browsers' default table layout) instead of
+     being forced to a fixed minimum — .table-scroll above still scrolls sideways on its
+     own if the content genuinely needs more room than the screen has. */
   border-collapse: separate;
   border-spacing: 0;
 }

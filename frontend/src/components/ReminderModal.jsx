@@ -1,7 +1,7 @@
 import { useApi } from '../hooks/useApi'
 import { reminderService } from '../services/reminderService'
 import { formatDate, formatDateTime, formatDays } from '../utils/date'
-import { TYPE_IT_SERVICE, TYPE_PRODUCT, TYPE_REAL_ESTATE, TYPE_TRAVEL } from '../utils/constants'
+import { TYPE_IT_SERVICE, TYPE_PRODUCT, TYPE_REAL_ESTATE, TYPE_TRAVEL, reminderTypeLabel } from '../utils/constants'
 import Modal from './Modal'
 import PhoneActions from './PhoneActions'
 import StatusBadge from './StatusBadge'
@@ -80,7 +80,7 @@ export default function ReminderModal({ reminder, actions, onClose }) {
         <Detail label="Phone (follow-up)">
           <PhoneActions reminder={reminder} />
         </Detail>
-        <Detail label="Reminder Type">{reminder.reminder_type}</Detail>
+        <Detail label="Reminder Type">{reminderTypeLabel(reminder.reminder_type)}</Detail>
 
         {isProduct && (
           <>

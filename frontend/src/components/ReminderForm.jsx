@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MANUAL_STATUS_OPTIONS, REMINDER_TYPES, TYPE_IT_SERVICE, TYPE_PRODUCT, TYPE_REAL_ESTATE, TYPE_TRAVEL } from '../utils/constants'
+import { MANUAL_STATUS_OPTIONS, REMINDER_TYPES, TYPE_IT_SERVICE, TYPE_PRODUCT, TYPE_REAL_ESTATE, TYPE_TRAVEL, reminderTypeLabel } from '../utils/constants'
 
 const BLANK = {
   reminder_type: '',
@@ -58,8 +58,6 @@ function validate(values) {
 
   if (values.reminder_type === TYPE_PRODUCT) {
     if (!values.product_name.trim()) errors.product_name = 'Enter the product name.'
-    if (!values.product_category_id) errors.product_category_id = 'Choose a product category.'
-    if (!(Number(values.quantity) >= 1)) errors.quantity = 'Quantity must be at least 1.'
   } else if (values.reminder_type === TYPE_IT_SERVICE) {
     const link = values.website_link.trim()
     if (!link) errors.website_link = 'Enter the website link.'
@@ -93,17 +91,22 @@ function Field({ label, required = false, hint, error, children }) {
 
 /**
  * Add / edit form. Fields shown depend on the reminder type: Product shows
- * Product Name / Category / Quantity / Price, IT Service shows Website Link,
- * Travel / Family Tour Booking shows Booking / Tour Name, Real Estate
- * Marketing shows Property / Project Name + Location. The latter two also
- * show a Status dropdown (Confirmed / Scheduled / Reminder / Processing /
- * Due / Completed / Cancelled) in place of the Completed checkbox the other
- * types use, and label the date field "Travel Date" / "Marketing Follow-up
- * Date" instead of "Scheduled / Due Date" — it's the same underlying field.
- * A reminder saved under an older type (e.g. Hosting) keeps that type as an
- * extra option instead of being forced onto one of the four current types,
- * and shows the Product-style fields (that is the shape it was originally
- * saved in).
+ * Product Name + Price, IT Service shows Website Link, Travel / Family Tour
+ * Booking shows Booking / Tour Name, Real Estate Marketing shows Property /
+ * Project Name + Location. The latter two also show a Status dropdown
+ * (Confirmed / Scheduled / Reminder / Processing / Due / Completed /
+ * Cancelled) in place of the Completed checkbox the other types use, and
+ * label the date field "Travel Date" / "Marketing Follow-up Date" instead of
+ * "Scheduled / Due Date" — it's the same underlying field.
+ *
+ * Product has no Category or Quantity field — there's nowhere left on this
+ * form to set them. A brand new Product reminder silently gets quantity 1
+ * and the "Other" category (or the first one, if "Other" doesn't exist);
+ * editing an existing one just resubmits whatever it already had, since
+ * nothing here can change it. A reminder saved under an older type (e.g.
+ * Hosting) keeps that type as an extra option instead of being forced onto
+ * one of the four current types, and — unlike Product — still shows and
+ * submits its own Category/Quantity, unaffected by this.
  *
  * `lockedAssignedPerson` ({id, name}), when given, means the signed-in
  * account is a User: the Assigned Person field is shown but not editable —
@@ -131,6 +134,12 @@ export default function ReminderForm({ reminder, staff, categories, lockedAssign
   const isLegacySelected = Boolean(legacyType) && values.reminder_type === legacyType
   const showProductFields = isProduct || isLegacySelected
   const dateLabel = isTravel ? 'Travel Date' : isRealEstate ? 'Marketing Follow-up Date' : 'Scheduled / Due Date'
+
+  // Product no longer has a Category or Quantity field on this form (see the docblock above),
+  // but the backend still requires both, so a brand new one gets a sensible silent default;
+  // editing an existing reminder just keeps resubmitting the value it already had (from
+  // toFormValues above), since there's no control here that could change it either way.
+  const defaultProductCategoryId = () => (categories.find((c) => c.name === 'Other') ?? categories[0])?.id
 
   const set = (name, value) => {
     setValues((current) => ({ ...current, [name]: value }))
@@ -171,8 +180,8 @@ export default function ReminderForm({ reminder, staff, categories, lockedAssign
     }
     if (isProduct) {
       payload.product_name = values.product_name.trim()
-      payload.product_category_id = Number(values.product_category_id)
-      payload.quantity = Number(values.quantity)
+      payload.product_category_id = values.product_category_id ? Number(values.product_category_id) : defaultProductCategoryId()
+      payload.quantity = values.quantity ? Number(values.quantity) : 1
       payload.price = values.price === '' ? null : Number(values.price)
     } else if (isItService) {
       payload.website_link = values.website_link.trim()
@@ -214,7 +223,8 @@ export default function ReminderForm({ reminder, staff, categories, lockedAssign
             <option value="">Select type</option>
             {typeOptions.map((type) => (
               <option key={type} value={type}>
-                {type === legacyType ? `${type} (existing)` : type}
+                {reminderTypeLabel(type)}
+                {type === legacyType ? ' (existing)' : ''}
               </option>
             ))}
           </select>
@@ -225,36 +235,41 @@ export default function ReminderForm({ reminder, staff, categories, lockedAssign
         </Field>
 
         {showProductFields && (
-          <>
-            <Field error={errors.product_name} label="Product Name" required={isProduct}>
-              <input type="text" maxLength={255} {...bind('product_name')} />
-            </Field>
-            <Field error={errors.product_category_id} label="Product Category" required={isProduct}>
-              <select {...bind('product_category_id')}>
-                <option value="">Select category</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </>
+          <Field error={errors.product_name} label="Product Name" required={isProduct}>
+            <input type="text" maxLength={255} {...bind('product_name')} />
+          </Field>
+        )}
+
+        {/* Category is only still editable for a reminder saved under an older type (see the
+            docblock above) — the current Product type has no Category field at all. */}
+        {isLegacySelected && (
+          <Field error={errors.product_category_id} label="Product Category">
+            <select {...bind('product_category_id')}>
+              <option value="">Select category</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </Field>
         )}
 
         <Field error={errors.phone} label="Phone Number" required>
           <input type="tel" inputMode="tel" placeholder="+91 98765 43210" {...bind('phone')} />
         </Field>
 
+        {/* Same as Category above: Quantity is only still editable for a legacy-type reminder. */}
+        {isLegacySelected && (
+          <Field error={errors.quantity} label="Quantity">
+            <input type="number" min="1" step="1" {...bind('quantity')} />
+          </Field>
+        )}
+
         {showProductFields && (
-          <>
-            <Field error={errors.quantity} label="Quantity" required={isProduct}>
-              <input type="number" min="1" step="1" {...bind('quantity')} />
-            </Field>
-            <Field error={errors.price} label="Price" hint="Optional.">
-              <input type="number" min="0" step="0.01" {...bind('price')} />
-            </Field>
-          </>
+          <Field error={errors.price} label="Price" hint="Optional.">
+            <input type="number" min="0" step="0.01" {...bind('price')} />
+          </Field>
         )}
 
         {isItService && (

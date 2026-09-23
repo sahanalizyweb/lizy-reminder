@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useToast } from '../hooks/useToast'
 import { reminderService } from '../services/reminderService'
+import { reminderTypeLabel } from '../utils/constants'
 import ConfirmDialog from './ConfirmDialog'
 import Pagination from './Pagination'
 import ReminderModal from './ReminderModal'
@@ -89,7 +90,7 @@ export default function ReminderResults({ rows, meta, loading, error, columns, t
       {deleting && (
         <ConfirmDialog
           title="Delete reminder?"
-          message={`Delete reminder #${deleting.id} (${deleting.product_name || deleting.website_link || deleting.booking_name || deleting.property_name || deleting.reminder_type} for ${deleting.customer_name})? This cannot be undone.`}
+          message={`Delete reminder #${deleting.id} (${deleting.product_name || deleting.website_link || deleting.booking_name || deleting.property_name || reminderTypeLabel(deleting.reminder_type)} for ${deleting.customer_name})? This cannot be undone.`}
           confirmLabel="Delete"
           danger
           busy={busy}
