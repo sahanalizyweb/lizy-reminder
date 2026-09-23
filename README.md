@@ -10,12 +10,18 @@ Internal reminder management for Lizyweb: **add reminder → assign person → r
 
 The React app only talks to the Laravel API (`/api/...`). Filtering, searching, date logic and paging all happen in MySQL queries.
 
-There are exactly two reminder types, each with its own fields:
+There are four reminder types, each with its own fields:
 
 - **Product** — Product Name, Product Category (from the `product_categories` table), Phone, Quantity, Price (optional).
 - **IT Service** — Website Link (clickable, opens in a new tab), Phone.
+- **Travel / Family Tour Booking** — Booking / Tour Name, Travel Date (reuses the same underlying date field as Product/IT Service's "Scheduled / Due Date", just relabelled).
+- **Real Estate Marketing** — Property / Project Name, Location, Marketing Follow-up Date (same underlying date field, relabelled again).
 
-Both also have Customer/Company, Assigned Person (or "Unassigned"), Scheduled/Due Date, Reminder Date and Notes. The Add/Edit form shows only the fields for the chosen type.
+All four also have Customer/Company, Phone, Assigned Person (or "Unassigned"), Reminder Date and Notes. The Add/Edit form shows only the fields for the chosen type.
+
+**Status.** Product and IT Service are unchanged: only Pending/Completed is stored, and Today/Upcoming/Overdue/Expired are calculated from the dates (see "How reminder status works" below). Travel / Family Tour Booking and Real Estate Marketing work differently — their Status is a dropdown picked by hand, not calculated: **Confirmed, Scheduled, Reminder, Processing, Due, Completed, Cancelled** (`Reminder::MANUAL_STATUS_TYPES` / `MANUAL_STATUSES`). It's required on their Add/Edit form (in place of the Completed checkbox the other types use), it's exactly what's shown as that reminder's status everywhere in the UI, and "Completed" is the one value shared with the other types — so the Complete button, `is_completed` and `completed_at` all work the same way regardless of type. The Today/Upcoming/Overdue dashboard tabs still bucket every type by date exactly as before (a Travel reminder due today still appears under Today's Work); it's only the *status badge shown on it* that differs by type. One nuance worth knowing: because only the literal "Completed" status is excluded from the "open" tabs, a "Cancelled" Travel/Real Estate reminder still shows up under Today's Work/Upcoming/Overdue for as long as its date logic puts it there — there's no separate "closed" bucket for Cancelled.
+
+The reminder table, filters, search, Excel export and Change History all adapt to whichever type(s) are in view: filtered to a single type, columns and field labels switch to match it (e.g. "Booking / Tour Name" + "Travel Date" for Travel); with no type filter, a merged "Details" column shows whichever field applies to each row and the date column keeps a generic label, the same way it already did for Product vs. IT Service.
 
 ## Run it
 
@@ -69,7 +75,7 @@ cd backend
 php artisan test           # uses the lizy_reminder_test database
 ```
 
-78 tests cover login, the two reminder types' conditional validation, product categories, the staff list, CRUD, the date logic (with the date moved to 21, 23 and 25 Sept 2026), completion, search, combined filters, paging, that a reminder saved under an older/removed type still works, the Change History rules, the Excel export, the roles/Manage Users rules (including the password-change rules below), and the notification bell below.
+94 tests cover login, all four reminder types' conditional validation (including the Travel/Real Estate manual Status dropdown), product categories, the staff list, CRUD, the date logic (with the date moved to 21, 23 and 25 Sept 2026), completion, search, combined filters, paging, that a reminder saved under an older/removed type still works, the Change History rules, the Excel export, the roles/Manage Users rules (including the password-change rules below), and the notification bell below.
 
 ## Roles
 
@@ -83,6 +89,8 @@ Two roles, on the `users` table (`role`: `admin` / `user`):
 **Passwords**: creating an account requires New Password + Confirm Password (must match, min 6 characters, hashed via the `password` => `hashed` cast — i.e. `Hash::make()`). Editing an existing account can leave both blank to keep the current password; if New Password is filled in, Confirm Password becomes required and must match — that's the only confirmation needed, for anyone's password including the signed-in Admin's own via self-edit.
 
 ## How reminder status works
+
+This section is about Product and IT Service (and any older legacy type). Travel / Family Tour Booking and Real Estate Marketing don't calculate a status at all — see "Status" above.
 
 Only **Pending** or **Completed** is stored (`reminders.status`). Everything else is calculated from the dates and *today's date* (application timezone `Asia/Kolkata`) every time, in SQL (`App\Models\Reminder` scopes) and in PHP (`Reminder::state()`), which follow identical rules:
 
@@ -141,9 +149,9 @@ All routes except `/login` need `Authorization: Bearer <token>`.
 | DELETE | `/api/reminders/{id}`           | delete (403 for a User if not theirs)     |
 | GET/POST/PUT/DELETE | `/api/manage-users`, `/api/manage-users/{id}` | Manage Users — Admin only (403 for a User); fields are `name`, `email`, `role`, `password`/`password_confirmation`; `password`/`password_confirmation` required on create, optional on update (required together and must match if `password` is set) |
 
-List filters (all combine with AND): `view` (`today`, `upcoming`, `overdue`, `completed`), `search` (customer, phone, product name, website link, notes; phone matches ignore spaces and +), `reminder_type` (`Product` or `IT Service`), `assigned_to` (staff id, `unassigned`, or omit for all — ignored for a User, always forced to their own linked person), `status`, `range` (`today`, `tomorrow`, `next7`, `next30`), `date_from`, `date_to` (both on the reminder date), `per_page`, `page`. On the `upcoming` view a date range widens it to Today + Upcoming so "Today" and "Next 7 Days" work.
+List filters (all combine with AND): `view` (`today`, `upcoming`, `overdue`, `completed`), `search` (customer, phone, product name, website link, booking/tour name, property/project name, location, notes; phone matches ignore spaces and +), `reminder_type` (`Product`, `IT Service`, `Travel / Family Tour Booking` or `Real Estate Marketing`), `assigned_to` (staff id, `unassigned`, or omit for all — ignored for a User, always forced to their own linked person), `status` (the calculated values, or — for Travel/Real Estate — any of `Reminder::MANUAL_STATUSES` directly), `range` (`today`, `tomorrow`, `next7`, `next30`), `date_from`, `date_to` (both on the reminder date), `per_page`, `page`. On the `upcoming` view a date range widens it to Today + Upcoming so "Today" and "Next 7 Days" work.
 
-`reminder_type` on create/update only accepts `Product` or `IT Service` — except when updating a reminder that already carries an older type (e.g. from before this list existed), which can keep that type without being forced onto one of the two. `assigned_to` is optional for an Admin (send `null` for "Unassigned"); a User's reminders are always assigned to their own linked person regardless of what is sent. Required fields depend on the type: Product needs `product_name`, `product_category_id`, `quantity`; IT Service needs `website_link` (a scheme is added automatically if you send e.g. `example.com`).
+`reminder_type` on create/update only accepts one of the four current types — except when updating a reminder that already carries an older type (e.g. from before this list existed), which can keep that type without being forced onto one of them. `assigned_to` is optional for an Admin (send `null` for "Unassigned"); a User's reminders are always assigned to their own linked person regardless of what is sent. Required fields depend on the type: Product needs `product_name`, `product_category_id`, `quantity`; IT Service needs `website_link` (a scheme is added automatically if you send e.g. `example.com`); Travel / Family Tour Booking needs `booking_name`; Real Estate Marketing needs `property_name` and `location`. The latter two also require `status` (one of `Reminder::MANUAL_STATUSES`) on every save, rather than it defaulting to Pending like Product/IT Service.
 
 ## Notes
 
